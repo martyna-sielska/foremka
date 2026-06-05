@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Foremka — Kawiarnia & Piekarnia Kraków</title>
+  <link rel="icon" type="image/png" href="assets/icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            cream: { 50:'#FDFAF5', 100:'#F9F3E8', 200:'#F2E6D0', 300:'#E8D5B5', 400:'#D9BF95' },
+            coffee: { 100:'#C9A882', 200:'#B8915F', 300:'#9E7847', 400:'#7D5C34', 500:'#5C3D1E', 600:'#3E2610', 700:'#261508' },
+            warm: { 50:'#FEFCF8', 100:'#FBF6EE', 200:'#F5EBD8', 300:'#EBDABE', 400:'#DEC8A2' },
+          },
+          fontFamily: {
+            serif: ['Playfair Display','Georgia','serif'],
+            sans: ['Inter','system-ui','sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { -webkit-font-smoothing: antialiased; }
+    .btn-primary { display:inline-flex; align-items:center; gap:.5rem; background:#5C3D1E; color:#FDFAF5; padding:.875rem 1.75rem; border-radius:9999px; font-size:.875rem; font-weight:500; letter-spacing:.05em; transition:all .3s; cursor:pointer; border:none; }
+    .btn-primary:hover { background:#3E2610; box-shadow:0 10px 15px -3px rgb(0 0 0/.1); transform:translateY(-2px); }
+    .btn-outline { display:inline-flex; align-items:center; gap:.5rem; border:1px solid #7D5C34; color:#5C3D1E; padding:.875rem 1.75rem; border-radius:9999px; font-size:.875rem; font-weight:500; letter-spacing:.05em; transition:all .3s; cursor:pointer; background:transparent; }
+    .btn-outline:hover { background:#5C3D1E; color:#FDFAF5; border-color:#5C3D1E; transform:translateY(-2px); }
+    .section-label { color:#9E7847; font-size:.75rem; font-weight:600; letter-spacing:.2em; text-transform:uppercase; display:block; }
+    .section-title { font-family:'Playfair Display',Georgia,serif; color:#3E2610; }
+  </style>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body style="background:#FDFAF5;color:#3E2610;font-family:Inter,system-ui,sans-serif;margin:0">
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useRef } = React;
+
+    /* ── GOOGLE RATINGS ── */
+    // Krok 1: wstaw swój klucz API Google (patrz instrukcja poniżej)
+    const GOOGLE_API_KEY  = 'WSTAW_KLUCZ_API';
+    // Krok 2: wstaw Place ID swojej kawiarni (patrz instrukcja poniżej)
+    const GOOGLE_PLACE_ID = 'WSTAW_PLACE_ID';
+
+    const RATING_FALLBACK = { rating: '4,9', reviewCount: 279 };
+    const CACHE_KEY = 'foremka_rating_v1';
+    const CACHE_TTL = 6 * 60 * 60 * 1000; // odświeżaj co 6 godzin
+
+    const RatingContext = React.createContext(RATING_FALLBACK);
+    const useRating = () => React.useContext(RatingContext);
+
+    function RatingProvider({ children }) {
+      const [data, setData] = useState(() => {
+        try {
+          const c = JSON.parse(localStorage.getItem(CACHE_KEY));
+          if (c && Date.now() - c.ts < CACHE_TTL) return c.data;
+        } catch {}
+        return RATING_FALLBACK;
+      });
+
+      useEffect(() => {
+        if (GOOGLE_API_KEY === 'WSTAW_KLUCZ_API') return;
+        try {
+          const c = JSON.parse(localStorage.getItem(CACHE_KEY));
+          if (c && Date.now() - c.ts < CACHE_TTL) return;
+        } catch {}
+
+        window.__foremkaGMapsReady = () => {
+          const svc = new google.maps.places.PlacesService(document.createElement('div'));
+          svc.getDetails(
+            { placeId: GOOGLE_PLACE_ID, fields: ['rating', 'user_ratings_total'] },
+            (place, status) => {
+              if (status !== google.maps.places.PlacesServiceStatus.OK) return;
+              const newData = {
+                rating: place.rating != null
+                  ? place.rating.toFixed(1).replace('.', ',')
+                  : RATING_FALLBACK.rating,
+                reviewCount: place.user_ratings_total ?? RATING_FALLBACK.reviewCount,
+              };
+              try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data: newData, ts: Date.now() })); } catch {}
+              setData(newData);
+            }
+          );
+        };
+
+        const s = document.createElement('script');
+        s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_API_KEY}&libraries=places&callback=__foremkaGMapsReady`;
+        s.async = true;
+        document.head.appendChild(s);
+        return () => { delete window.__foremkaGMapsReady; };
+      }, []);
+
+      return <RatingContext.Provider value={data}>{children}</RatingContext.Provider>;
+    }
+
+    /* ── ICONS ── */
+    const Ico = ({ size=24, className='', children }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
+    );
+    const ArrowDown     = p => <Ico {...p}><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></Ico>;
+    const Star          = p => <Ico {...p}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></Ico>;
+    const Wheat         = p => <Ico {...p}><path d="M2 22 16 8"/><path d="M3.47 12.53 5 11l1.53 1.53a3.5 3.5 0 0 1 0 4.94L5 19l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z"/><path d="M7.47 8.53 9 7l1.53 1.53a3.5 3.5 0 0 1 0 4.94L9 15l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z"/><path d="M11.47 4.53 13 3l1.53 1.53a3.5 3.5 0 0 1 0 4.94L13 11l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z"/><path d="M20 2h2v2a4 4 0 0 1-4 4h-2V6a4 4 0 0 1 4-4Z"/></Ico>;
+    const Coffee        = p => <Ico {...p}><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></Ico>;
+    const Heart         = p => <Ico {...p}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></Ico>;
+    const Sun           = p => <Ico {...p}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-14.07 1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2m-15.07 5.07 1.41-1.41M17.66 6.34l1.41-1.41"/></Ico>;
+    const BookOpen      = p => <Ico {...p}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></Ico>;
+    const Users         = p => <Ico {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></Ico>;
+    const Instagram     = p => <Ico {...p}><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></Ico>;
+    const MapPin        = p => <Ico {...p}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></Ico>;
+    const Clock         = p => <Ico {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></Ico>;
+    const ExternalLink  = p => <Ico {...p}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></Ico>;
+    const ChevronLeft   = p => <Ico {...p}><polyline points="15 18 9 12 15 6"/></Ico>;
+    const ChevronRight  = p => <Ico {...p}><polyline points="9 18 15 12 9 6"/></Ico>;
+    const Menu          = p => <Ico {...p}><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/></Ico>;
+    const X             = p => <Ico {...p}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></Ico>;
+
+    /* ── NAVBAR ── */
+    const navLinks = [
+      { label:'O nas', href:'#o-nas' },
+      { label:'Wypieki', href:'#wypieki' },
+      { label:'Atmosfera', href:'#atmosfera' },
+      { label:'Opinie', href:'#opinie' },
+      { label:'Kontakt', href:'#kontakt' },
+    ];
+
+    function Navbar() {
+      const [scrolled, setScrolled] = useState(false);
+      const [menuOpen, setMenuOpen] = useState(false);
+
+      useEffect(() => {
+        const h = () => setScrolled(window.scrollY > 40);
+        window.addEventListener('scroll', h);
+        return () => window.removeEventListener('scroll', h);
+      }, []);
+
+      const go = href => { setMenuOpen(false); document.querySelector(href)?.scrollIntoView({ behavior:'smooth' }); };
+
+      return (
+        <>
+          <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${scrolled ? 'bg-cream-50/95 backdrop-blur-md shadow-sm border-b border-cream-200' : 'bg-transparent'}`}>
+            <nav className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+              <a href="#" onClick={e=>{ e.preventDefault(); window.scrollTo({top:0,behavior:'smooth'}); }}
+                className="font-serif text-2xl font-bold tracking-tight"
+                style={{ color: scrolled ? '#3E2610' : '#FDFAF5' }}>
+                Foremka
+              </a>
+              <ul className="hidden md:flex items-center gap-8">
+                {navLinks.map(l => (
+                  <li key={l.href}>
+                    <button onClick={() => go(l.href)}
+                      className={`text-sm font-medium tracking-wide transition-colors duration-200 ${scrolled ? 'text-coffee-400 hover:text-coffee-600' : 'text-cream-300/80 hover:text-cream-50'}`}>
+                      {l.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className="hidden md:block">
+                <button onClick={() => go('#kontakt')}
+                  className={`text-xs py-2.5 px-5 rounded-full font-medium tracking-wide transition-all duration-300 hover:-translate-y-0.5 ${scrolled ? 'bg-coffee-500 text-cream-50 hover:bg-coffee-600' : 'bg-cream-50/20 text-cream-50 border border-cream-200/40 hover:bg-cream-50/30 backdrop-blur-sm'}`}>
+                  Odwiedź nas
+                </button>
+              </div>
+              <button className={`md:hidden p-1 ${scrolled ? 'text-coffee-500' : 'text-cream-50'}`}
+                onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu">
+                {menuOpen ? <X size={22}/> : <Menu size={22}/>}
+              </button>
+            </nav>
+          </header>
+
+          <div className={`fixed inset-0 z-40 transition-all duration-300 md:hidden ${menuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+            <div className="absolute inset-0 bg-coffee-700/40 backdrop-blur-sm" onClick={() => setMenuOpen(false)}/>
+            <div className={`absolute top-0 right-0 h-full w-72 bg-cream-50 shadow-2xl flex flex-col transition-transform duration-300 ${menuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+              <div className="flex items-center justify-between px-6 h-16 border-b border-cream-200">
+                <span className="font-serif text-xl font-bold text-coffee-600">Foremka</span>
+                <button onClick={() => setMenuOpen(false)} className="text-coffee-400"><X size={22}/></button>
+              </div>
+              <ul className="flex flex-col gap-1 p-6">
+                {navLinks.map(l => (
+                  <li key={l.href}>
+                    <button onClick={() => go(l.href)}
+                      className="w-full text-left px-4 py-3 text-coffee-500 hover:text-coffee-600 hover:bg-cream-100 rounded-xl transition-colors font-medium">
+                      {l.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className="px-6 mt-auto pb-8">
+                <button onClick={() => go('#kontakt')} className="btn-primary w-full justify-center">Odwiedź nas</button>
+              </div>
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    /* ── HERO ── */
+    function Hero() {
+      const { rating, reviewCount } = useRating();
+      const ref = useRef(null);
+      useEffect(() => {
+        const t = setTimeout(() => { if(ref.current){ ref.current.style.opacity='1'; ref.current.style.transform='translateY(0)'; } }, 100);
+        return () => clearTimeout(t);
+      }, []);
+
+      return (
+        <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
+          {/* TODO: dodaj własne zdjęcie tła — zamień ten div na <img src="..." className="absolute inset-0 w-full h-full object-cover"/> */}
+          <div className="absolute inset-0 bg-gradient-to-br from-coffee-700 via-coffee-600 to-coffee-500"/>
+
+          <div className="relative z-10 mb-8 flex items-center gap-2 bg-cream-50/15 backdrop-blur-sm border border-cream-200/30 rounded-full px-5 py-2.5">
+            <div className="flex items-center gap-0.5">
+              {[...Array(5)].map((_,i) => <Star key={i} size={12} className="fill-amber-400 text-amber-400"/>)}
+            </div>
+            <span className="text-cream-100 text-sm font-semibold">{rating}/5</span>
+            <span className="text-cream-200/70 text-xs">•</span>
+            <span className="text-cream-200 text-xs">{reviewCount}+ opinii Google</span>
+          </div>
+
+          <div ref={ref} className="relative z-10 text-center px-6 max-w-4xl mx-auto"
+            style={{ opacity:0, transform:'translateY(30px)', transition:'opacity .8s ease, transform .8s ease' }}>
+            <p className="text-cream-300/80 text-xs font-semibold tracking-widest uppercase mb-5">Kawiarnia & Piekarnia — Kraków</p>
+            <h1 className="font-serif text-cream-50 text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold leading-tight mb-6 tracking-tight">
+              Świeżo wypiekane{' '}
+              <span className="italic font-normal text-cream-200">każdego dnia</span>
+            </h1>
+            <p className="text-cream-200/90 text-lg sm:text-xl max-w-2xl mx-auto leading-relaxed mb-10 font-light">
+              Rzemieślnicze wypieki, kawa i przytulna atmosfera w sercu Krakowa. Miejsce stworzone do dobrego początku dnia.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <button onClick={() => document.querySelector('#wypieki')?.scrollIntoView({behavior:'smooth'})}
+                className="bg-cream-50 text-coffee-600 px-8 py-4 rounded-full text-sm font-semibold tracking-wide transition-all duration-300 hover:bg-white hover:shadow-xl hover:-translate-y-0.5 w-full sm:w-auto">
+                Zobacz menu
+              </button>
+              <button onClick={() => document.querySelector('#kontakt')?.scrollIntoView({behavior:'smooth'})}
+                className="border border-cream-200/60 text-cream-100 px-8 py-4 rounded-full text-sm font-medium tracking-wide transition-all duration-300 hover:bg-cream-50/15 hover:border-cream-100 w-full sm:w-auto backdrop-blur-sm">
+                Odwiedź nas
+              </button>
+            </div>
+          </div>
+
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2">
+            <span className="text-cream-300/60 text-xs tracking-widest uppercase">Przewiń</span>
+            <ArrowDown size={16} className="text-cream-300/60 animate-bounce"/>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-cream-50 to-transparent z-10"/>
+        </section>
+      );
+    }
+
+    /* ── ABOUT ── */
+    const pillars = [
+      { icon:Wheat,   title:'Rzemieślnicze wypieki', desc:'Każdy bochenek, każda drożdżówka – wypiekana ręcznie, z wybranych składników, według sprawdzonych receptur.' },
+      { icon:Coffee,  title:'Kawa',        desc:'Starannie dobrane ziarna, precyzyjne parzenie i prawdziwa pasja do każdej filiżanki.' },
+      { icon:Heart,   title:'Z miłości do jedzenia', desc:'Tworzymy miejsce, w którym jedzenie łączy ludzi. Każdy gość zasługuje na coś wyjątkowego.' },
+    ];
+
+    function About() {
+      const { rating, reviewCount } = useRating();
+      const ref = useRef(null);
+      useEffect(() => {
+        const el = ref.current; if(!el) return;
+        const obs = new IntersectionObserver(([e]) => { if(e.isIntersecting){ el.style.opacity='1'; el.style.transform='translateY(0)'; obs.disconnect(); } }, {threshold:.2});
+        obs.observe(el); return () => obs.disconnect();
+      }, []);
+
+      return (
+        <section id="o-nas" className="py-24 md:py-32 bg-cream-50">
+          <div className="max-w-6xl mx-auto px-6">
+            <div className="grid md:grid-cols-2 gap-16 lg:gap-24 items-center">
+              <div className="relative">
+                {/* TODO: dodaj zdjęcie wypieków */}
+                <div className="relative rounded-2xl overflow-hidden aspect-[4/5] shadow-2xl">
+                  <img src="assets/chleb.png" alt="Rzemieślnicze wypieki Foremka" className="w-full h-full object-cover"/>
+                  <div className="absolute inset-0 bg-gradient-to-t from-coffee-700/20 to-transparent"/>
+                </div>
+                <div className="absolute -bottom-6 -right-6 bg-cream-50 rounded-2xl p-5 shadow-xl border border-cream-200 max-w-[200px]">
+                  <p className="font-serif text-coffee-600 text-3xl font-bold leading-none mb-1">{rating}</p>
+                  <div className="flex items-center gap-0.5 mb-1.5">
+                    {[...Array(5)].map((_,i) => <span key={i} className="text-amber-400 text-sm">★</span>)}
+                  </div>
+                  <p className="text-coffee-400 text-xs">{reviewCount}+ zadowolonych gości</p>
+                </div>
+                {/* TODO: dodaj zdjęcie kawy */}
+                <div className="absolute -top-6 -left-6 w-32 h-32 rounded-2xl overflow-hidden shadow-xl border-4 border-cream-50 hidden md:block">
+                  <img src="assets/kawa4.png" alt="Kawa" className="w-full h-full object-cover"/>
+                </div>
+              </div>
+
+              <div ref={ref} style={{ opacity:0, transform:'translateY(30px)', transition:'opacity .7s ease, transform .7s ease' }}>
+                <p className="section-label mb-4">O nas</p>
+                <h2 className="section-title text-4xl md:text-5xl font-bold leading-tight mb-6">
+                  Miejsce, gdzie{' '}<span className="italic font-normal">zapach chleba</span>{' '}wita cię od progu
+                </h2>
+                <p className="text-coffee-400 text-lg leading-relaxed mb-5 font-light">
+                  Foremka to nasza odpowiedź na potrzebę miejsca, w którym czas zwalnia. Piekarnia, w której każdy wypiek powstaje ręcznie – z jakościowych składników, według receptur, które smakowały nam od zawsze.
+                </p>
+                <p className="text-coffee-400 leading-relaxed mb-10 font-light">
+                  Kawiarnia, gdzie kawa serwowana jest z troską i wiedzą. Przestrzeń, która zaprasza – na śniadanie przed pracą, spokojny poranek z książką czy spotkanie z przyjaciółmi. W Krakowie, przy ulicy Radzikowskiego.
+                </p>
+                <div className="space-y-5">
+                  {pillars.map(({ icon:Icon, title, desc }) => (
+                    <div key={title} className="flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-coffee-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Icon size={18} className="text-coffee-400"/>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-coffee-600 text-sm mb-0.5">{title}</p>
+                        <p className="text-coffee-400 text-sm leading-relaxed font-light">{desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    /* ── PRODUCTS ── */
+    const products = [
+      { name:'Chleby rzemieślnicze', desc:'Pieczone na zakwasie, z chrupiącą skórką i miękkim wnętrzem.', tag:'Pieczywo', img:'assets/chleb2.png' },
+      { name:'Drożdżówki', desc:'Miękkie, puszyste, z ulubionymi nadzieniami. Jak u babci.', tag:'Wypieki', img:'assets/drozdzowka.png' },
+      { name:'Kanapki', desc:'Świeże, chrupiące pieczywo z pysznymi dodatkami. Idealne na szybkie śniadanie.', tag:'Przekąski', img:'assets/kanapki.png' },
+      { name:'Kawa', desc:'Starannie dobrane ziarna, precyzyjnie parzone, przez naszych pracowników.', tag:'Kawa', img:'assets/kawa3.png'},
+      { name:'Ciasta sezonowe', desc:'Zmieniamy je z sezonami, zawsze używając świeżych, lokalnych składników.', tag:'Ciasta', img:'assets/ciasta.png' },
+      { name:'Ciastka', desc:'Chrupiące, domowe, w dziesiątkach smaków. Idealne do kawy.', tag:'Słodkości', img:'assets/ciastka.png' },
+    ];
+
+    function ProductCard({ product, index }) {
+      const ref = useRef(null);
+      useEffect(() => {
+        const el = ref.current; if(!el) return;
+        const obs = new IntersectionObserver(([e]) => {
+          if(e.isIntersecting){ setTimeout(() => { el.style.opacity='1'; el.style.transform='translateY(0)'; }, index*80); obs.disconnect(); }
+        }, {threshold:.1});
+        obs.observe(el); return () => obs.disconnect();
+      }, [index]);
+
+      return (
+        <div ref={ref}
+          style={{ opacity:0, transform:'translateY(24px)', transition:'opacity .6s ease, transform .6s ease' }}
+          className="group bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-500 hover:-translate-y-1 border border-cream-200/60">
+          <div className="aspect-[4/3] overflow-hidden relative">
+            {product.img
+              ? <img src={product.img} alt={product.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"/>
+              : <div className="w-full h-full bg-coffee-100 flex items-center justify-center transition-transform duration-700 group-hover:scale-105">
+                  <span className="text-coffee-300 text-xs text-center px-4">{product.name}</span>
+                </div>
+            }
+            <div className="absolute inset-0 bg-gradient-to-t from-coffee-700/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"/>
+            <span className="absolute top-3 left-3 bg-cream-50/90 backdrop-blur-sm text-coffee-500 text-xs font-semibold px-3 py-1 rounded-full">
+              {product.tag}
+            </span>
+          </div>
+          <div className="p-5">
+            <h3 className="font-serif text-coffee-600 text-lg font-semibold mb-1.5">{product.name}</h3>
+            <p className="text-coffee-400 text-sm leading-relaxed font-light">{product.desc}</p>
+          </div>
+        </div>
+      );
+    }
+
+    function Products() {
+      const ref = useRef(null);
+      useEffect(() => {
+        const el = ref.current; if(!el) return;
+        const obs = new IntersectionObserver(([e]) => { if(e.isIntersecting){ el.style.opacity='1'; el.style.transform='translateY(0)'; obs.disconnect(); } }, {threshold:.2});
+        obs.observe(el); return () => obs.disconnect();
+      }, []);
+
+      return (
+        <section id="wypieki" className="py-24 md:py-32 bg-warm-100">
+          <div className="max-w-6xl mx-auto px-6">
+            <div ref={ref} className="text-center mb-16"
+              style={{ opacity:0, transform:'translateY(20px)', transition:'opacity .7s ease, transform .7s ease' }}>
+              <p className="section-label mb-4">Nasze specjały</p>
+              <h2 className="section-title text-4xl md:text-5xl font-bold leading-tight mb-5">
+                Wypieki, które{' '}<span className="italic font-normal">pokochasz</span>
+              </h2>
+              <p className="text-coffee-400 max-w-xl mx-auto leading-relaxed font-light">
+                Świeże każdego dnia. Tworzone z pasją i z najlepszych składników. Nasze wypieki smakują tak, jak powinny – naturalnie i autentycznie.
+              </p>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {products.map((p,i) => <ProductCard key={p.name} product={p} index={i}/>)}
+            </div>
+            <div className="text-center mt-12">
+              <button onClick={() => document.querySelector('#kontakt')?.scrollIntoView({behavior:'smooth'})} className="btn-outline">
+                Odwiedź nas, by zobaczyć całe menu
+              </button>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    /* ── ATMOSPHERE ── */
+    const qualities = [
+      { icon:Sun,      title:'Naturalne światło', desc:'Przestrzeń pełna słońca, idealna na spokojny poranek.' },
+      { icon:BookOpen, title:'Cicha strefa',       desc:'Spokojne miejsce do pracy, czytania i myślenia.' },
+      { icon:Users,    title:'Dla każdego',        desc:'Na śniadanie, kawę z przyjaciółmi lub solo z laptopem.' },
+    ];
+
+    function Atmosphere() {
+      const leftRef = useRef(null);
+      const rightRef = useRef(null);
+
+      useEffect(() => {
+        [leftRef, rightRef].forEach((r, i) => {
+          const el = r.current; if(!el) return;
+          const obs = new IntersectionObserver(([e]) => {
+            if(e.isIntersecting){ setTimeout(()=>{ el.style.opacity='1'; el.style.transform='translateY(0)'; }, i*150); obs.disconnect(); }
+          }, {threshold:.15});
+          obs.observe(el);
+        });
+      }, []);
+
+      return (
+        <section id="atmosfera" className="py-24 md:py-32 bg-cream-50">
+          <div className="max-w-6xl mx-auto px-6">
+            <div ref={leftRef} className="text-center mb-16"
+              style={{ opacity:0, transform:'translateY(20px)', transition:'opacity .7s ease, transform .7s ease' }}>
+              <p className="section-label mb-4">Atmosfera</p>
+              <h2 className="section-title text-4xl md:text-5xl font-bold leading-tight mb-5">
+                Twoje ulubione{' '}<span className="italic font-normal">miejsce w mieście</span>
+              </h2>
+              <p className="text-coffee-400 max-w-xl mx-auto leading-relaxed font-light">
+                Zaprojektowaliśmy przestrzeń, w której czas płynie wolniej. Naturalne materiały, ciepłe światło i zapach świeżego chleba – wszystko po to, żebyś poczuł się jak w domu.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-12 lg:gap-16 items-center">
+              <div ref={rightRef} style={{ opacity:0, transform:'translateY(20px)', transition:'opacity .7s ease, transform .7s ease' }}>
+                {/* TODO: dodaj zdjęcia wnętrza kawiarni */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2 rounded-2xl overflow-hidden shadow-lg">
+                    <img src="assets/wnętrze.png" alt="Wnętrze kawiarni Foremka" className="w-full object-cover" style={{aspectRatio:'16/9'}}/>
+                  </div>
+                  <div className="rounded-2xl overflow-hidden shadow-lg">
+                    <img src="assets/drozdzowki2.png" alt="Kawa i wypieki" className="w-full object-cover" style={{aspectRatio:'1/1'}}/>
+                  </div>
+                  <div className="rounded-2xl overflow-hidden shadow-lg">
+                    <img src="assets/ledy.png" alt="Naturalne światło" className="w-full object-cover" style={{aspectRatio:'1/1'}}/>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-5">
+                {qualities.map(({ icon:Icon, title, desc }) => (
+                  <div key={title} className="flex items-start gap-5 p-6 bg-white rounded-2xl shadow-sm border border-cream-200/60 hover:shadow-md transition-shadow duration-300">
+                    <div className="w-12 h-12 rounded-xl bg-coffee-100 flex items-center justify-center flex-shrink-0">
+                      <Icon size={20} className="text-coffee-400"/>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-coffee-600 mb-1.5">{title}</h3>
+                      <p className="text-coffee-400 text-sm leading-relaxed font-light">{desc}</p>
+                    </div>
+                  </div>
+                ))}
+                <div className="bg-coffee-500 rounded-2xl p-6 text-cream-50">
+                  <p className="font-serif text-2xl italic leading-relaxed mb-3">
+                    "Jestem oczarowana tym miejscem, naprawdę! To moje niedawne odkrycie, ale myślę, że często będę się tam pojawiać."
+                  </p>
+                  <div className="flex items-center gap-0.5">
+                    {[...Array(5)].map((_,i) => <span key={i} className="text-amber-400 text-sm">★</span>)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    /* ── REVIEWS ── */
+    const reviews = [
+      { name:'Artur O.', date:'Grudzień 2025',    text:'Miejsce troche schowane między blokami, ale zdecydowanie warto je odkryć. Pyszne słodkości, dobra kawa, przyjemny wystrój, miła obsługa. Jest nawet miejsce dla dzieci. Super:)', avatar:'A', bg:'#9E7847' },
+      { name:'Katarzyna S.',    date:'Kwiecień 2026',  text:'Jestem stałym klientem zarówno kaw jak i drożdżówek, ciast i chlebów (na miejscu i na wynos). Wszystko świeże i pyszne - i przemiła obsługa! 🙂 Bardzo fajne miejsce do spotkań ze znajomymi - w okresie Świątecznym piękny wystrój. A pączki i drożdżówki jedyne takie w Krakowie 😊',          avatar:'K', bg:'#7D5C34' },
+      { name:'Katarzyna C.',     date:'Styczeń 2026', text:'Najlepsza kawiarnia w tym rejonie, duży wybór ciast i drożdżówek, pyszne chleby. Obsługa bardzo miła, w środku panuje spokojna przyjemna atmosfera. Polecam usiąść na dłuższą chwilę z dzbankiem herbaty i ciastkiem.',         avatar:'K', bg:'#C9A882' },
+      { name:'Stanisław K.',    date:'2024',text:'Niesamowite klimatyczne miejsce! Pyszna kawa, smaczne pieczywo i wypieki własnego wyrobu. Malinówka była jedną z najlepszych które kiedykolwiek jadłem. Jest dużo miejsca, znacznie więcej niż w większości kawiareń, przy tym bardzo ładny wystrój wnętrza, aż chce się siedzieć. Bardzo gorąco polecam i często tu będę wpadać na pyszną kawę i smaczne drożdżówki!',                avatar:'S', bg:'#5C3D1E' },
+      { name:'Kinga',    date:'2024',     text:'Atmosfera w Foremce jest bardzo przyjazna i swobodna. Obsługa przemiła i serdeczna, Panie zawsze uśmiechnięte i radosne. Bardzo się to ceni 😊',      avatar:'K', bg:'#9E7847' },
+      { name:'Anna B.',    date:'Luty 2026',  text:'Wyjątkowe miejsce. Pyszności, zarówno chlebki jak i słodkości. Miła, profesjonalna obsługa, wyjątkowo klimatyczne miejsce.',    avatar:'A', bg:'#7D5C34' },
+    ];
+
+    function Reviews() {
+      const { rating, reviewCount } = useRating();
+      const [current, setCurrent] = useState(0);
+      const [vis, setVis] = useState(3);
+      const ref = useRef(null);
+
+      useEffect(() => {
+        const upd = () => setVis(window.innerWidth < 768 ? 1 : window.innerWidth < 1024 ? 2 : 3);
+        upd(); window.addEventListener('resize', upd); return () => window.removeEventListener('resize', upd);
+      }, []);
+
+      useEffect(() => {
+        const el = ref.current; if(!el) return;
+        const obs = new IntersectionObserver(([e]) => { if(e.isIntersecting){ el.style.opacity='1'; el.style.transform='translateY(0)'; obs.disconnect(); } }, {threshold:.2});
+        obs.observe(el); return () => obs.disconnect();
+      }, []);
+
+      const max = Math.max(0, reviews.length - vis);
+
+      return (
+        <section id="opinie" className="py-24 md:py-32 bg-coffee-600 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-96 h-96 bg-coffee-500/30 rounded-full -translate-x-1/2 -translate-y-1/2 blur-3xl"/>
+          <div className="absolute bottom-0 right-0 w-96 h-96 bg-coffee-700/40 rounded-full translate-x-1/2 translate-y-1/2 blur-3xl"/>
+          <div className="max-w-6xl mx-auto px-6 relative z-10">
+            <div ref={ref} className="text-center mb-14"
+              style={{ opacity:0, transform:'translateY(20px)', transition:'opacity .7s ease, transform .7s ease' }}>
+              <p className="text-coffee-200/70 text-xs font-semibold tracking-widest uppercase mb-4">Opinie gości</p>
+              <h2 className="font-serif text-cream-50 text-4xl md:text-5xl font-bold leading-tight mb-6">
+                Co mówią nasi{' '}<span className="italic font-normal text-cream-300">goście</span>
+              </h2>
+              <div className="inline-flex items-center gap-4 bg-coffee-500/40 backdrop-blur-sm rounded-2xl px-6 py-4 border border-coffee-400/30">
+                <div className="text-center">
+                  <p className="font-serif text-cream-50 text-4xl font-bold">{rating}</p>
+                  <div className="flex items-center gap-0.5 justify-center mt-1">
+                    {[...Array(5)].map((_,i) => <Star key={i} size={14} className="fill-amber-400 text-amber-400"/>)}
+                  </div>
+                </div>
+                <div className="w-px h-12 bg-coffee-400/30"/>
+                <div className="text-left">
+                  <p className="text-cream-200 text-sm font-medium">{reviewCount}+ opinii</p>
+                  <p className="text-coffee-200/60 text-xs mt-0.5">na Google Maps</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-10 min-h-[260px]">
+              {reviews.slice(current, current+vis).map((r,i) => (
+                <div key={`${current}-${i}`} className="bg-coffee-500/30 backdrop-blur-sm rounded-2xl p-6 border border-coffee-400/20 hover:bg-coffee-500/40 transition-colors duration-300 flex flex-col">
+                  <div className="flex items-center gap-1 mb-4">
+                    {[...Array(5)].map((_,j) => <Star key={j} size={14} className="fill-amber-400 text-amber-400"/>)}
+                  </div>
+                  <p className="text-cream-200 text-sm leading-relaxed font-light mb-5 italic flex-1">"{r.text}"</p>
+                  <div className="flex items-center gap-3 pt-4 border-t border-coffee-400/20">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-cream-50 text-sm font-semibold flex-shrink-0"
+                      style={{backgroundColor: r.bg}}>{r.avatar}</div>
+                    <div>
+                      <p className="text-cream-100 text-sm font-medium">{r.name}</p>
+                      <p className="text-coffee-300/60 text-xs">{r.date}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-center gap-4">
+              <button onClick={() => setCurrent(c => Math.max(0,c-1))} disabled={current===0}
+                className="w-11 h-11 rounded-full border border-coffee-400/30 flex items-center justify-center text-cream-200 hover:bg-coffee-500/40 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200">
+                <ChevronLeft size={18}/>
+              </button>
+              <div className="flex items-center gap-2">
+                {Array.from({length:max+1}).map((_,i) => (
+                  <button key={i} onClick={() => setCurrent(i)}
+                    className={`transition-all duration-300 rounded-full ${i===current?'w-6 h-2 bg-cream-200':'w-2 h-2 bg-coffee-400/40 hover:bg-coffee-300/60'}`}/>
+                ))}
+              </div>
+              <button onClick={() => setCurrent(c => Math.min(max,c+1))} disabled={current>=max}
+                className="w-11 h-11 rounded-full border border-coffee-400/30 flex items-center justify-center text-cream-200 hover:bg-coffee-500/40 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200">
+                <ChevronRight size={18}/>
+              </button>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    /* ── INSTAGRAM ── */
+    const posts = [
+      { alt:'Świeże wypieki', img:'assets/rogal.png' },
+      { alt:'Kawa latte art', img:'assets/matcha.png' },
+      { alt:'Chleb rzemieślniczy', img:'assets/kanapki2.png' },
+      { alt:'Drożdżówki', img:'assets/paczki.png' },
+      { alt:'Ciasto sezonowe', img:'assets/dodatkowopaczki.png' },
+      { alt:'Wnętrze kawiarni', img:'assets/sniadanie.png' },
+    ];
+
+    function InstagramSection() {
+      const ref = useRef(null);
+      useEffect(() => {
+        const el = ref.current; if(!el) return;
+        const obs = new IntersectionObserver(([e]) => { if(e.isIntersecting){ el.style.opacity='1'; el.style.transform='translateY(0)'; obs.disconnect(); } }, {threshold:.1});
+        obs.observe(el); return () => obs.disconnect();
+      }, []);
+
+      return (
+        <section className="py-24 md:py-32 bg-warm-100">
+          <div className="max-w-6xl mx-auto px-6">
+            <div ref={ref} className="text-center mb-12"
+              style={{ opacity:0, transform:'translateY(20px)', transition:'opacity .7s ease, transform .7s ease' }}>
+              <p className="section-label mb-4">Instagram</p>
+              <h2 className="section-title text-4xl md:text-5xl font-bold leading-tight mb-4">
+                Śledź nas na{' '}<span className="italic font-normal">Instagramie</span>
+              </h2>
+              <a href="https://instagram.com/foremka.krakow" target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-coffee-400 hover:text-coffee-600 transition-colors text-sm font-medium">
+                <Instagram size={16}/> @foremka.krakow
+              </a>
+            </div>
+
+            {/* TODO: zastąp własnymi zdjęciami z Instagrama */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-10">
+              {posts.map((post,i) => (
+                <a key={i} href="https://instagram.com/foremka.krakow" target="_blank" rel="noopener noreferrer"
+                  className="group relative aspect-square overflow-hidden rounded-xl shadow-sm hover:shadow-xl transition-all duration-500 hover:-translate-y-1">
+                  {post.img
+                    ? <img src={post.img} alt={post.alt} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"/>
+                    : <div className="w-full h-full bg-coffee-100 flex items-center justify-center transition-transform duration-700 group-hover:scale-105">
+                        <span className="text-coffee-300 text-xs text-center px-3">{post.alt}</span>
+                      </div>
+                  }
+                  <div className="absolute inset-0 bg-coffee-700/0 group-hover:bg-coffee-700/40 transition-colors duration-300 flex items-center justify-center">
+                    <Instagram size={28} className="text-cream-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300"/>
+                  </div>
+                </a>
+              ))}
+            </div>
+
+            <div className="text-center">
+              <a href="https://instagram.com/foremka.krakow" target="_blank" rel="noopener noreferrer" className="btn-primary">
+                <Instagram size={16}/> Obserwuj @foremka.krakow
+              </a>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    /* ── CONTACT ── */
+    const hours = [
+      { day:'Poniedziałek', time:'Nieczynne', closed:true },
+      { day:'Wtorek',       time:'8:00 – 19:00', closed:false },
+      { day:'Środa',        time:'8:00 – 19:00', closed:false },
+      { day:'Czwartek',     time:'8:00 – 19:00', closed:false },
+      { day:'Piątek',       time:'8:00 – 19:00', closed:false },
+      { day:'Sobota',       time:'8:00 – 19:00', closed:false },
+      { day:'Niedziela',    time:'8:00 – 19:00', closed:false },
+    ];
+
+    function Contact() {
+      const ref = useRef(null);
+      useEffect(() => {
+        const el = ref.current; if(!el) return;
+        const obs = new IntersectionObserver(([e]) => { if(e.isIntersecting){ el.style.opacity='1'; el.style.transform='translateY(0)'; obs.disconnect(); } }, {threshold:.1});
+        obs.observe(el); return () => obs.disconnect();
+      }, []);
+
+      const isOpen = new Date().getDay() !== 1;
+      const mapsUrl = 'https://maps.google.com/?q=Walerego+Eljasza-Radzikowskiego+59,+31-315+Krakow';
+
+      return (
+        <section id="kontakt" className="py-24 md:py-32 bg-cream-50">
+          <div className="max-w-6xl mx-auto px-6">
+            <div ref={ref} className="text-center mb-16"
+              style={{ opacity:0, transform:'translateY(20px)', transition:'opacity .7s ease, transform .7s ease' }}>
+              <p className="section-label mb-4">Kontakt & Lokalizacja</p>
+              <h2 className="section-title text-4xl md:text-5xl font-bold leading-tight mb-5">
+                Znajdź nas{' '}<span className="italic font-normal">w Krakowie</span>
+              </h2>
+              <p className="text-coffee-400 max-w-xl mx-auto leading-relaxed font-light">
+                Wpadnij na świeże wypieki i dobrą kawę.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-10 lg:gap-16">
+              <div className="space-y-5">
+<div className="bg-white rounded-2xl p-6 shadow-sm border border-cream-200/60">
+                  <div className="flex items-start gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-coffee-100 flex items-center justify-center flex-shrink-0">
+                      <MapPin size={20} className="text-coffee-400"/>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-coffee-600 mb-1">Adres</p>
+                      <p className="text-coffee-400 text-sm leading-relaxed font-light">
+                        ul. Walerego Eljasza-Radzikowskiego 59/LU1<br/>31-315 Kraków
+                      </p>
+                      <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 mt-3 text-coffee-400 hover:text-coffee-600 text-sm font-medium transition-colors">
+                        <ExternalLink size={14}/> Jak do nas trafić
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-cream-200/60">
+                  <div className="flex items-start gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-coffee-100 flex items-center justify-center flex-shrink-0">
+                      <Clock size={20} className="text-coffee-400"/>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-coffee-600 mb-3">Godziny otwarcia</p>
+                      <div className="space-y-1.5">
+                        {hours.map(({ day:d, time, closed }, i) => {
+                          const td = new Date().getDay();
+                          const isToday = td===0 ? i===6 : td-1===i;
+                          return (
+                            <div key={d} className={`flex justify-between items-center py-1 text-sm ${isToday?'font-semibold text-coffee-600':'text-coffee-400 font-light'}`}>
+                              <span>{d}</span>
+                              <span className={closed?'text-red-400':''}>{time}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-coffee-500 rounded-2xl p-6 text-cream-50">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Instagram size={22} className="text-cream-200"/>
+                    <p className="font-semibold">Instagram</p>
+                  </div>
+                  <p className="text-cream-200/80 text-sm mb-4 font-light leading-relaxed">
+                    Śledź nas po codzienne porcje świeżości, nowe wypieki i kawową inspirację.
+                  </p>
+                  <a href="https://instagram.com/foremka.krakow" target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 bg-cream-50 text-coffee-600 px-5 py-2.5 rounded-full text-sm font-semibold hover:bg-white transition-colors">
+                    @foremka.krakow <ExternalLink size={13}/>
+                  </a>
+                </div>
+              </div>
+
+              <div className="rounded-2xl overflow-hidden shadow-xl border border-cream-200/60 min-h-[400px]">
+                <iframe
+                  title="Foremka mapa"
+                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2561.3!2d19.9271!3d50.0777!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x47165b3e5c7cf8a5%3A0x6b5b5b5b5b5b5b5b!2sWalerego%20Eljasza-Radzikowskiego%2059%2C%2031-315%20Krak%C3%B3w!5e0!3m2!1spl!2spl!4v1620000000000!5m2!1spl!2spl"
+                  className="w-full h-full min-h-[400px]"
+                  style={{border:0}}
+                  allowFullScreen
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              </div>
+            </div>
+
+            <div className="text-center mt-16">
+              <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="btn-primary">
+                <MapPin size={16}/> Jak do nas trafić
+              </a>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    /* ── FOOTER ── */
+    function Footer() {
+      return (
+        <footer className="bg-coffee-700 text-cream-200">
+          <div className="max-w-6xl mx-auto px-6 py-16">
+            <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-10 mb-14">
+              <div className="md:col-span-2">
+                <p className="font-serif text-cream-50 text-3xl font-bold mb-3">Foremka</p>
+                <p className="text-coffee-200/70 text-sm leading-relaxed font-light max-w-xs mb-6">
+                  Kawiarnia i piekarnia rzemieślnicza w sercu Krakowa. Świeże wypieki i kawa każdego dnia.
+                </p>
+                <div className="flex items-center gap-3">
+                  <a href="https://instagram.com/foremka.krakow" target="_blank" rel="noopener noreferrer"
+                    className="w-10 h-10 rounded-full bg-coffee-600 flex items-center justify-center text-cream-200 hover:bg-coffee-500 hover:text-cream-50 transition-colors"
+                    aria-label="Instagram Foremka">
+                    <Instagram size={18}/>
+                  </a>
+                  <span className="text-coffee-300/60 text-xs">@foremka.krakow</span>
+                </div>
+              </div>
+              <div>
+                <p className="text-cream-100 font-semibold text-sm mb-4 tracking-wide">Lokalizacja</p>
+                <div className="flex items-start gap-2.5 text-coffee-200/70 text-sm font-light leading-relaxed">
+                  <MapPin size={15} className="flex-shrink-0 mt-0.5 text-coffee-300"/>
+                  <div>
+                    <p>ul. W. Eljasza-Radzikowskiego 59/LU1</p>
+                    <p>31-315 Kraków</p>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <p className="text-cream-100 font-semibold text-sm mb-4 tracking-wide">Godziny</p>
+                <div className="flex items-start gap-2.5">
+                  <Clock size={15} className="flex-shrink-0 mt-0.5 text-coffee-300"/>
+                  <div className="text-coffee-200/70 text-sm font-light leading-relaxed space-y-0.5">
+                    <p>Pon: nieczynne</p>
+                    <p>Wt – Nd: 8:00 – 19:00</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-coffee-600 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <p className="text-coffee-300/50 text-xs">© {new Date().getFullYear()} Foremka Kawiarnia & Piekarnia. Wszystkie prawa zastrzeżone.</p>
+              <p className="text-coffee-300/40 text-xs">Kraków, Polska</p>
+            </div>
+          </div>
+        </footer>
+      );
+    }
+
+    /* ── APP ── */
+    function App() {
+      return (
+        <div className="min-h-screen">
+          <Navbar/>
+          <Hero/>
+          <About/>
+          <Products/>
+          <Atmosphere/>
+          <Reviews/>
+          <InstagramSection/>
+          <Contact/>
+          <Footer/>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<RatingProvider><App/></RatingProvider>);
+  </script>
+</body>
+</html>
