@@ -800,7 +800,7 @@
                           const isToday = td===0 ? i===6 : td-1===i;
                           return (
                             <div key={d} className={`flex justify-between items-center py-0.5 md:py-1 text-xs md:text-sm ${isToday?'font-semibold text-coffee-600':'text-coffee-400 font-light'}`}>
-                              <span><span className="hidden md:inline">{d}</span><span className="md:hidden">{short}</span></span>
+                              <span>{d}</span>
                               <span className={`whitespace-nowrap ml-1 ${closed?'text-red-400':''}`}>
                                 <span className="hidden md:inline">{time}</span>
                                 <span className="md:hidden">{closed?'Niecz.':'8–19'}</span>
