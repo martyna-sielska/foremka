@@ -31,6 +31,11 @@
   <style>
     html { scroll-behavior: smooth; }
     body { -webkit-font-smoothing: antialiased; }
+    .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    @media (max-width: 767px) {
+      .contact-info-grid { grid-template-columns: 5fr 8fr; }
+    }
     .btn-primary { display:inline-flex; align-items:center; gap:.5rem; background:#5C3D1E; color:#FDFAF5; padding:.875rem 1.75rem; border-radius:9999px; font-size:.875rem; font-weight:500; letter-spacing:.05em; transition:all .3s; cursor:pointer; border:none; }
     .btn-primary:hover { background:#3E2610; box-shadow:0 10px 15px -3px rgb(0 0 0/.1); transform:translateY(-2px); }
     .btn-outline { display:inline-flex; align-items:center; gap:.5rem; border:1px solid #7D5C34; color:#5C3D1E; padding:.875rem 1.75rem; border-radius:9999px; font-size:.875rem; font-weight:500; letter-spacing:.05em; transition:all .3s; cursor:pointer; background:transparent; }
@@ -328,10 +333,10 @@
     /* ── PRODUCTS ── */
     const products = [
       { name:'Chleby rzemieślnicze', desc:'Pieczone na zakwasie, z chrupiącą skórką i miękkim wnętrzem.', tag:'Pieczywo', img:'assets/chleb2.png' },
+      { name:'Kawa', desc:'Starannie dobrane ziarna, precyzyjnie parzone przez nasz zespół.', tag:'Kawa', img:'assets/kawa3.png'},
+      { name:'Ciasta sezonowe', desc:'Zmieniamy je z sezonami, zawsze używając świeżych, lokalnych składników.', tag:'Ciasta', img:'assets/ciasta.png' },
       { name:'Drożdżówki', desc:'Miękkie, puszyste, z ulubionymi nadzieniami. Jak u babci.', tag:'Wypieki', img:'assets/drozdzowka.png' },
       { name:'Kanapki', desc:'Świeże, chrupiące pieczywo z pysznymi dodatkami. Idealne na szybkie śniadanie.', tag:'Przekąski', img:'assets/kanapki.png' },
-      { name:'Kawa', desc:'Starannie dobrane ziarna, precyzyjnie parzone, przez naszych pracowników.', tag:'Kawa', img:'assets/kawa3.png'},
-      { name:'Ciasta sezonowe', desc:'Zmieniamy je z sezonami, zawsze używając świeżych, lokalnych składników.', tag:'Ciasta', img:'assets/ciasta.png' },
       { name:'Ciastka', desc:'Chrupiące, domowe, w dziesiątkach smaków. Idealne do kawy.', tag:'Słodkości', img:'assets/ciastka.png' },
     ];
 
@@ -371,11 +376,43 @@
 
     function Products() {
       const ref = useRef(null);
+      const trackRef = useRef(null);
+      const scrollTimer = useRef(null);
+      const [current, setCurrent] = useState(0);
+      const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
+
+      useEffect(() => {
+        const upd = () => setIsMobile(window.innerWidth < 640);
+        window.addEventListener('resize', upd);
+        return () => window.removeEventListener('resize', upd);
+      }, []);
+
       useEffect(() => {
         const el = ref.current; if(!el) return;
         const obs = new IntersectionObserver(([e]) => { if(e.isIntersecting){ el.style.opacity='1'; el.style.transform='translateY(0)'; obs.disconnect(); } }, {threshold:.2});
         obs.observe(el); return () => obs.disconnect();
       }, []);
+
+      const scrollToIdx = idx => {
+        if (!trackRef.current) return;
+        const card = trackRef.current.firstElementChild;
+        if (!card) return;
+        trackRef.current.scrollTo({ left: idx * (card.offsetWidth + 12), behavior: 'smooth' });
+      };
+
+      const onScroll = () => {
+        if (scrollTimer.current) clearTimeout(scrollTimer.current);
+        scrollTimer.current = setTimeout(() => {
+          if (!trackRef.current) return;
+          const card = trackRef.current.firstElementChild;
+          if (!card) return;
+          const idx = Math.round(trackRef.current.scrollLeft / (card.offsetWidth + 12));
+          setCurrent(Math.min(Math.max(idx, 0), products.length - 1));
+        }, 80);
+      };
+
+      const prev = () => { const n = Math.max(0, current - 1); setCurrent(n); scrollToIdx(n); };
+      const next = () => { const n = Math.min(products.length - 1, current + 1); setCurrent(n); scrollToIdx(n); };
 
       return (
         <section id="wypieki" className="py-24 md:py-32 bg-warm-100">
@@ -390,9 +427,50 @@
                 Świeże każdego dnia. Tworzone z pasją i z najlepszych składników. Nasze wypieki smakują tak, jak powinny – naturalnie i autentycznie.
               </p>
             </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {products.map((p,i) => <ProductCard key={p.name} product={p} index={i}/>)}
-            </div>
+
+            {isMobile ? (
+              <>
+                <div
+                  ref={trackRef}
+                  className="no-scrollbar -mx-6"
+                  style={{
+                    display:'flex', gap:'12px',
+                    paddingLeft:'48px', paddingRight:'48px',
+                    overflowX:'auto',
+                    scrollSnapType:'x mandatory',
+                    WebkitOverflowScrolling:'touch',
+                  }}
+                  onScroll={onScroll}
+                >
+                  {products.map((p, i) => (
+                    <div key={p.name} style={{ width:'calc(100vw - 120px)', flexShrink:0, scrollSnapAlign:'center' }}>
+                      <ProductCard product={p} index={0}/>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-center gap-4 mt-6">
+                  <button onClick={prev} disabled={current === 0}
+                    className="w-9 h-9 rounded-full border border-coffee-300/50 flex items-center justify-center text-coffee-400 hover:bg-coffee-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                    <ChevronLeft size={16}/>
+                  </button>
+                  <div className="flex gap-2">
+                    {products.map((_, i) => (
+                      <button key={i} onClick={() => { setCurrent(i); scrollToIdx(i); }}
+                        className={`rounded-full transition-all duration-300 ${i === current ? 'w-5 h-2 bg-coffee-500' : 'w-2 h-2 bg-coffee-300/40 hover:bg-coffee-300/60'}`}/>
+                    ))}
+                  </div>
+                  <button onClick={next} disabled={current === products.length - 1}
+                    className="w-9 h-9 rounded-full border border-coffee-300/50 flex items-center justify-center text-coffee-400 hover:bg-coffee-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                    <ChevronRight size={16}/>
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {products.map((p,i) => <ProductCard key={p.name} product={p} index={i}/>)}
+              </div>
+            )}
+
             <div className="text-center mt-12">
               <button onClick={() => document.querySelector('#kontakt')?.scrollIntoView({behavior:'smooth'})} className="btn-outline">
                 Odwiedź nas, by zobaczyć całe menu
@@ -496,6 +574,8 @@
       const [current, setCurrent] = useState(0);
       const [vis, setVis] = useState(3);
       const ref = useRef(null);
+      const trackRef = useRef(null);
+      const scrollTimer = useRef(null);
 
       useEffect(() => {
         const upd = () => setVis(window.innerWidth < 768 ? 1 : window.innerWidth < 1024 ? 2 : 3);
@@ -509,6 +589,29 @@
       }, []);
 
       const max = Math.max(0, reviews.length - vis);
+
+      const scrollToIdx = idx => {
+        if (!trackRef.current) return;
+        const card = trackRef.current.firstElementChild;
+        if (!card) return;
+        trackRef.current.scrollTo({ left: idx * (card.offsetWidth + 20), behavior: 'smooth' });
+      };
+
+      const onScroll = () => {
+        clearTimeout(scrollTimer.current);
+        scrollTimer.current = setTimeout(() => {
+          if (!trackRef.current) return;
+          const card = trackRef.current.firstElementChild;
+          if (!card) return;
+          const idx = Math.round(trackRef.current.scrollLeft / (card.offsetWidth + 20));
+          setCurrent(Math.min(Math.max(idx, 0), max));
+        }, 80);
+      };
+
+      const prev = () => { const n = Math.max(0, current-1); setCurrent(n); scrollToIdx(n); };
+      const next = () => { const n = Math.min(max, current+1); setCurrent(n); scrollToIdx(n); };
+
+      const cardW = vis === 1 ? '100%' : vis === 2 ? 'calc(50% - 10px)' : 'calc(33.333% - 13.333px)';
 
       return (
         <section id="opinie" className="py-24 md:py-32 bg-coffee-600 relative overflow-hidden">
@@ -536,16 +639,23 @@
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-10 min-h-[260px]">
-              {reviews.slice(current, current+vis).map((r,i) => (
-                <div key={`${current}-${i}`} className="bg-coffee-500/30 backdrop-blur-sm rounded-2xl p-6 border border-coffee-400/20 hover:bg-coffee-500/40 transition-colors duration-300 flex flex-col">
+            <div
+              ref={trackRef}
+              className="no-scrollbar mb-10"
+              style={{ display:'flex', gap:'20px', overflowX:'auto', scrollSnapType:'x mandatory', WebkitOverflowScrolling:'touch' }}
+              onScroll={onScroll}
+            >
+              {reviews.map(r => (
+                <div key={r.name}
+                  style={{ width:cardW, flexShrink:0, scrollSnapAlign:'start' }}
+                  className="bg-coffee-500/30 backdrop-blur-sm rounded-2xl p-6 border border-coffee-400/20 hover:bg-coffee-500/40 transition-colors duration-300 flex flex-col">
                   <div className="flex items-center gap-1 mb-4">
                     {[...Array(5)].map((_,j) => <Star key={j} size={14} className="fill-amber-400 text-amber-400"/>)}
                   </div>
                   <p className="text-cream-200 text-sm leading-relaxed font-light mb-5 italic flex-1">"{r.text}"</p>
                   <div className="flex items-center gap-3 pt-4 border-t border-coffee-400/20">
                     <div className="w-9 h-9 rounded-full flex items-center justify-center text-cream-50 text-sm font-semibold flex-shrink-0"
-                      style={{backgroundColor: r.bg}}>{r.avatar}</div>
+                      style={{backgroundColor:r.bg}}>{r.avatar}</div>
                     <div>
                       <p className="text-cream-100 text-sm font-medium">{r.name}</p>
                       <p className="text-coffee-300/60 text-xs">{r.date}</p>
@@ -556,17 +666,17 @@
             </div>
 
             <div className="flex items-center justify-center gap-4">
-              <button onClick={() => setCurrent(c => Math.max(0,c-1))} disabled={current===0}
+              <button onClick={prev} disabled={current===0}
                 className="w-11 h-11 rounded-full border border-coffee-400/30 flex items-center justify-center text-cream-200 hover:bg-coffee-500/40 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200">
                 <ChevronLeft size={18}/>
               </button>
               <div className="flex items-center gap-2">
                 {Array.from({length:max+1}).map((_,i) => (
-                  <button key={i} onClick={() => setCurrent(i)}
+                  <button key={i} onClick={() => { setCurrent(i); scrollToIdx(i); }}
                     className={`transition-all duration-300 rounded-full ${i===current?'w-6 h-2 bg-cream-200':'w-2 h-2 bg-coffee-400/40 hover:bg-coffee-300/60'}`}/>
                 ))}
               </div>
-              <button onClick={() => setCurrent(c => Math.min(max,c+1))} disabled={current>=max}
+              <button onClick={next} disabled={current>=max}
                 className="w-11 h-11 rounded-full border border-coffee-400/30 flex items-center justify-center text-cream-200 hover:bg-coffee-500/40 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200">
                 <ChevronRight size={18}/>
               </button>
@@ -639,13 +749,13 @@
 
     /* ── CONTACT ── */
     const hours = [
-      { day:'Poniedziałek', time:'Nieczynne', closed:true },
-      { day:'Wtorek',       time:'8:00 – 19:00', closed:false },
-      { day:'Środa',        time:'8:00 – 19:00', closed:false },
-      { day:'Czwartek',     time:'8:00 – 19:00', closed:false },
-      { day:'Piątek',       time:'8:00 – 19:00', closed:false },
-      { day:'Sobota',       time:'8:00 – 19:00', closed:false },
-      { day:'Niedziela',    time:'8:00 – 19:00', closed:false },
+      { day:'Poniedziałek', short:'Pon', time:'Nieczynne',    closed:true  },
+      { day:'Wtorek',       short:'Wt',  time:'8:00 – 19:00', closed:false },
+      { day:'Środa',        short:'Śr',  time:'8:00 – 19:00', closed:false },
+      { day:'Czwartek',     short:'Czw', time:'8:00 – 19:00', closed:false },
+      { day:'Piątek',       short:'Pt',  time:'8:00 – 19:00', closed:false },
+      { day:'Sobota',       short:'Sob', time:'8:00 – 19:00', closed:false },
+      { day:'Niedziela',    short:'Nd',  time:'8:00 – 19:00', closed:false },
     ];
 
     function Contact() {
@@ -674,40 +784,27 @@
             </div>
 
             <div className="grid md:grid-cols-2 gap-10 lg:gap-16">
-              <div className="space-y-5">
-<div className="bg-white rounded-2xl p-6 shadow-sm border border-cream-200/60">
-                  <div className="flex items-start gap-4">
-                    <div className="w-11 h-11 rounded-xl bg-coffee-100 flex items-center justify-center flex-shrink-0">
-                      <MapPin size={20} className="text-coffee-400"/>
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-coffee-600 mb-1">Adres</p>
-                      <p className="text-coffee-400 text-sm leading-relaxed font-light">
-                        ul. Walerego Eljasza-Radzikowskiego 59/LU1<br/>31-315 Kraków
-                      </p>
-                      <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 mt-3 text-coffee-400 hover:text-coffee-600 text-sm font-medium transition-colors">
-                        <ExternalLink size={14}/> Jak do nas trafić
-                      </a>
-                    </div>
-                  </div>
-                </div>
+              <div className="contact-info-grid grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-5">
 
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-cream-200/60">
-                  <div className="flex items-start gap-4">
-                    <div className="w-11 h-11 rounded-xl bg-coffee-100 flex items-center justify-center flex-shrink-0">
+                {/* GODZINY — lewa kolumna na mobile (row-span-2), środkowa na desktop */}
+                <div className="order-1 md:order-2 row-span-2 md:row-span-1 bg-white rounded-2xl p-3 md:p-6 shadow-sm border border-cream-200/60">
+                  <div className="flex items-start gap-3 md:gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-coffee-100 items-center justify-center flex-shrink-0 hidden md:flex">
                       <Clock size={20} className="text-coffee-400"/>
                     </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-coffee-600 mb-3">Godziny otwarcia</p>
-                      <div className="space-y-1.5">
-                        {hours.map(({ day:d, time, closed }, i) => {
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-coffee-600 mb-2 md:mb-3 text-xs md:text-base">Godziny</p>
+                      <div className="space-y-0.5 md:space-y-1.5">
+                        {hours.map(({ day:d, short, time, closed }, i) => {
                           const td = new Date().getDay();
                           const isToday = td===0 ? i===6 : td-1===i;
                           return (
-                            <div key={d} className={`flex justify-between items-center py-1 text-sm ${isToday?'font-semibold text-coffee-600':'text-coffee-400 font-light'}`}>
-                              <span>{d}</span>
-                              <span className={closed?'text-red-400':''}>{time}</span>
+                            <div key={d} className={`flex justify-between items-center py-0.5 md:py-1 text-xs md:text-sm ${isToday?'font-semibold text-coffee-600':'text-coffee-400 font-light'}`}>
+                              <span><span className="hidden md:inline">{d}</span><span className="md:hidden">{short}</span></span>
+                              <span className={`whitespace-nowrap ml-1 ${closed?'text-red-400':''}`}>
+                                <span className="hidden md:inline">{time}</span>
+                                <span className="md:hidden">{closed?'Niecz.':'8–19'}</span>
+                              </span>
                             </div>
                           );
                         })}
@@ -716,17 +813,40 @@
                   </div>
                 </div>
 
-                <div className="bg-coffee-500 rounded-2xl p-6 text-cream-50">
-                  <div className="flex items-center gap-3 mb-3">
-                    <Instagram size={22} className="text-cream-200"/>
-                    <p className="font-semibold">Instagram</p>
+                {/* ADRES — prawa kolumna góra na mobile, pierwsza na desktop */}
+                <div className="order-2 md:order-1 bg-white rounded-2xl p-3 md:p-6 shadow-sm border border-cream-200/60">
+                  <div className="flex items-start gap-2 md:gap-4">
+                    <div className="w-8 h-8 md:w-11 md:h-11 rounded-xl bg-coffee-100 flex items-center justify-center flex-shrink-0">
+                      <MapPin size={15} className="text-coffee-400"/>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-coffee-600 mb-1 text-xs md:text-base">Adres</p>
+                      <p className="text-coffee-400 leading-relaxed font-light hidden md:block text-sm">
+                        ul. Walerego Eljasza-Radzikowskiego 59/LU1<br/>31-315 Kraków
+                      </p>
+                      <p className="text-coffee-400 text-xs leading-relaxed font-light md:hidden">
+                        Radzikowskiego 59/LU1<br/>31-315 Kraków
+                      </p>
+                      <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 mt-2 md:mt-3 text-coffee-400 hover:text-coffee-600 text-xs md:text-sm font-medium transition-colors">
+                        <ExternalLink size={11}/> <span className="hidden md:inline">Jak do nas trafić</span><span className="md:hidden">Nawiguj</span>
+                      </a>
+                    </div>
                   </div>
-                  <p className="text-cream-200/80 text-sm mb-4 font-light leading-relaxed">
+                </div>
+
+                {/* INSTAGRAM — prawa kolumna dół na mobile, trzecia na desktop */}
+                <div className="order-3 bg-coffee-500 rounded-2xl p-3 md:p-6 text-cream-50">
+                  <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                    <Instagram size={18} className="text-cream-200"/>
+                    <p className="font-semibold text-sm md:text-base">Instagram</p>
+                  </div>
+                  <p className="text-cream-200/80 text-sm mb-4 font-light leading-relaxed hidden md:block">
                     Śledź nas po codzienne porcje świeżości, nowe wypieki i kawową inspirację.
                   </p>
                   <a href="https://instagram.com/foremka.krakow" target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 bg-cream-50 text-coffee-600 px-5 py-2.5 rounded-full text-sm font-semibold hover:bg-white transition-colors">
-                    @foremka.krakow <ExternalLink size={13}/>
+                    className="inline-flex items-center gap-1.5 bg-cream-50 text-coffee-600 px-3 md:px-5 py-2 md:py-2.5 rounded-full text-xs md:text-sm font-semibold hover:bg-white transition-colors">
+                    @foremka.krakow <ExternalLink size={11}/>
                   </a>
                 </div>
               </div>
@@ -810,12 +930,12 @@
         <div className="min-h-screen">
           <Navbar/>
           <Hero/>
+          <Contact/>
           <About/>
           <Products/>
           <Atmosphere/>
           <Reviews/>
           <InstagramSection/>
-          <Contact/>
           <Footer/>
         </div>
       );
