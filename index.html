@@ -437,8 +437,10 @@
                     display:'flex', gap:'12px',
                     paddingLeft:'48px', paddingRight:'48px',
                     overflowX:'auto',
+                    overflowY:'hidden',
                     scrollSnapType:'x mandatory',
-                    WebkitOverflowScrolling:'touch',
+                    touchAction:'pan-x',
+                    overscrollBehavior:'contain',
                   }}
                   onScroll={onScroll}
                 >
